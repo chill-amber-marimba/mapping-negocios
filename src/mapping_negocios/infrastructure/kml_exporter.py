@@ -11,36 +11,19 @@ from pathlib import Path
 
 import polars as pl
 
+from mapping_negocios.domain.models import Adherencia
+
 KML_NS = "http://www.opengis.net/kml/2.2"
 ICON_URL = "https://omaps.app/placemarks/placemark-{color}.png"
-DEFAULT_COLOR = "blue"
+UNASSESSED_COLOR = "gray"
 
-# Google place type -> Organic Maps pin color. First match wins.
-TYPE_COLORS: dict[str, str] = {
-    "restaurant": "red",
-    "cafe": "red",
-    "bar": "red",
-    "bakery": "red",
-    "food": "red",
-    "meal_takeaway": "red",
-    "store": "orange",
-    "shopping_mall": "orange",
-    "supermarket": "orange",
-    "grocery_store": "orange",
-    "clothing_store": "orange",
-    "health": "green",
-    "pharmacy": "green",
-    "doctor": "green",
-    "dentist": "green",
-    "hospital": "green",
-    "gym": "green",
-    "lodging": "purple",
-    "hotel": "purple",
-    "bank": "yellow",
-    "atm": "yellow",
-    "finance": "yellow",
+# Adherencia semaphore -> Organic Maps pin color.
+ADHERENCIA_COLORS: dict[Adherencia, str] = {
+    Adherencia.GREEN: "green",
+    Adherencia.YELLOW: "yellow",
+    Adherencia.RED: "red",
 }
-COLORS = (*sorted(set(TYPE_COLORS.values())), DEFAULT_COLOR)
+COLORS = (*ADHERENCIA_COLORS.values(), UNASSESSED_COLOR)
 
 DESCRIPTION_FIELDS = {
     "formatted_address": "Address",
@@ -49,22 +32,23 @@ DESCRIPTION_FIELDS = {
     "rating": "Rating",
     "user_rating_count": "Reviews",
     "primary_type": "Type",
+    "adherencia": "Adherencia",
     "google_maps_uri": "Google Maps",
 }
 
 
-def color_for(types: list[str] | None) -> str:
-    """Pick a pin color from a place's types.
+def color_for(adherencia: str | None) -> str:
+    """Pick a pin color from a place's adherencia semaphore.
 
     Args:
-        types: Google place types, primary type first.
+        adherencia: An ``Adherencia`` value, or None if not assessed yet.
 
     Returns:
         An Organic Maps color name.
     """
-    return next(
-        (TYPE_COLORS[t] for t in types or [] if t in TYPE_COLORS), DEFAULT_COLOR
-    )
+    if adherencia is None:
+        return UNASSESSED_COLOR
+    return ADHERENCIA_COLORS[Adherencia(adherencia)]
 
 
 class KmlExporter:
@@ -113,12 +97,8 @@ def _placemark(row: dict) -> ET.Element:
         for key, label in DESCRIPTION_FIELDS.items()
         if row.get(key) is not None
     )
-    types = (
-        [row["primary_type"], *(row["types"] or [])]
-        if row["primary_type"]
-        else row["types"]
-    )
-    ET.SubElement(placemark, _tag("styleUrl")).text = f"#placemark-{color_for(types)}"
+    color = color_for(row["adherencia"])
+    ET.SubElement(placemark, _tag("styleUrl")).text = f"#placemark-{color}"
     extended = ET.SubElement(placemark, _tag("ExtendedData"))
     for key, value in row.items():
         if value is None or key in {"name", "latitude", "longitude"}:

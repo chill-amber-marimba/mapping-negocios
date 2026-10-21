@@ -6,7 +6,13 @@ Importable as ``fakes`` because ``tests`` is on pytest's ``pythonpath``.
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from mapping_negocios.domain.models import BoundingBox, Business, Coordinates, Region
+from mapping_negocios.domain.models import (
+    Adherencia,
+    BoundingBox,
+    Business,
+    Coordinates,
+    Region,
+)
 from mapping_negocios.domain.ports import SearchPage
 
 REGION = Region(
@@ -23,6 +29,7 @@ def make_business(
     types: tuple[str, ...] = (),
     phone: str | None = None,
     postal_code: str | None = None,
+    adherencia: Adherencia | None = None,
 ) -> Business:
     """Build a business with sensible defaults."""
     return Business(
@@ -33,6 +40,7 @@ def make_business(
         types=types,
         phone=phone,
         postal_code=postal_code,
+        adherencia=adherencia,
     )
 
 
