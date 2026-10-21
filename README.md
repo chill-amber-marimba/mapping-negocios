@@ -98,8 +98,8 @@ cli.py (composition root)  ──►  application  ──►  domain
 | Layer | Contents |
 |---|---|
 | `domain/` | Entities and value objects (`Business`, `BoundingBox`…), `PlacesGateway` port. No dependencies. |
-| `application/` | `ExtractBusinesses` use case, search strategies, Polars schema/transforms, `BusinessExporter` port. |
-| `infrastructure/` | Google Places HTTP client, CSV and KML exporters. |
+| `application/` | `ExtractBusinesses` use case, search strategies, Polars schema/transforms, `BusinessExporter` and `BusinessImporter` ports. |
+| `infrastructure/` | Google Places HTTP client, CSV and KML exporters and importers. |
 | `cli.py` | Typer CLI wiring concrete adapters. |
 
 If desired, adding this code to a FastAPI endpoint or an ETL task, could be as

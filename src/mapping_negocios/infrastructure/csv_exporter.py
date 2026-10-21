@@ -4,7 +4,7 @@ from pathlib import Path
 
 import polars as pl
 
-LIST_SEPARATOR = "|"
+from mapping_negocios.application.frames import LIST_SEPARATOR
 
 
 class CsvExporter:
