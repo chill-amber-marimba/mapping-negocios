@@ -55,6 +55,15 @@ you filled in) are kept. The progress file is deleted once the region is fully
 searched. Changing the tile size or `--type`s requires `--restart`, which
 discards the saved progress and searches from scratch.
 
+#### Per-box files
+
+With `--grid`, each searched box also gets its own CSV and KML in
+`output/chamberi-madrid-bb/`, named after its south-west and north-east corners,
+e.g. `S40.430000_W-3.710000_N40.438992_E-3.699400.csv` (boxes with no
+businesses included, so the folder records the whole searched area). A resumed
+run adds the files of the boxes it searches; `--restart` does not delete
+existing ones.
+
 ### Output Columns
 
 `place_id, name, primary_type, types, latitude, longitude, formatted_address,

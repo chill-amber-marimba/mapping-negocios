@@ -1,5 +1,6 @@
 """Tests for the CLI commands."""
 
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from mapping_negocios import cli
 from mapping_negocios.application.frames import businesses_to_frame
 from mapping_negocios.cli import app
 from mapping_negocios.config import API_KEY_ENV
-from mapping_negocios.domain.models import Adherencia
+from mapping_negocios.domain.models import Adherencia, BoundingBox, Coordinates
 from mapping_negocios.infrastructure.csv_exporter import CsvExporter
 from mapping_negocios.infrastructure.csv_importer import CsvImporter
 from mapping_negocios.infrastructure.kml_exporter import KML_NS
@@ -21,6 +22,8 @@ from fakes import FakeGateway, make_business, make_dense_businesses
 
 runner = CliRunner()
 GRID_ARGS = ["--grid", "--tile-size-m", "1000", "--max-requests", "3"]
+COORD = r"(-?\d+\.\d{6})"
+BOX_NAME = re.compile(f"S{COORD}_W{COORD}_N{COORD}_E{COORD}")
 
 
 @pytest.fixture
@@ -74,6 +77,29 @@ def test_extract_grid_resumes_until_done(
     # No box is searched twice across the resumed runs.
     calls = fake_places.nearby_calls
     assert len(set(calls)) == len(calls)
+
+    # Every searched box, from every run, has its own CSV and KML.
+    box_csvs = sorted((tmp_path / "test-town-bb").glob("*.csv"))
+    assert box_csvs
+    box_ids: set[str] = set()
+    for box_csv in box_csvs:
+        assert box_csv.with_suffix(".kml").exists()
+        match = BOX_NAME.fullmatch(box_csv.stem)
+        assert match, box_csv.name
+        box = BoundingBox(*map(float, match.groups()))
+        frame = CsvImporter().read(box_csv)
+        assert all(
+            box.contains(Coordinates(lat, lng))
+            for lat, lng in frame.select("latitude", "longitude").iter_rows()
+        )
+        box_ids |= set(frame["place_id"])
+    assert box_ids == set(final["place_id"])
+
+
+def test_box_stem() -> None:
+    """Box file names carry the south-west and north-east corners."""
+    box = BoundingBox(south=40.0, west=-3.8, north=40.0125, east=-3.79)
+    assert cli.box_stem(box) == "S40.000000_W-3.800000_N40.012500_E-3.790000"
 
 
 def test_extract_grid_rejects_other_options_when_resuming(
