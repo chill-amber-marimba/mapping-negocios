@@ -1,0 +1,67 @@
+[project]
+name = "mapping-negocios"
+version = "0.1.0"
+description = "Map the businesses of a region from Google Places to CSV and an Organic Maps KML."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "polars>=2.0.0",
+    "typer>=0.27.3",
+]
+
+[project.scripts]
+mapping-negocios = "mapping_negocios.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.13.1,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "commitizen>=4.10.1",
+    "prek>=0.5.6",
+    "pyrefly>=1.4.0",
+    "pytest>=8.4.2",
+    "ruff>=0.17.1",
+]
+
+[tool.ruff.lint]
+select = ["ANN", "B", "D", "E", "F", "FAST", "I", "ICN", "INP", "N", "RUF", "T20", "TD"]
+extend-select = ["D400"]
+# TD003: TODOs are tracked in code, not every one has an issue to link.
+ignore = ["TD003"]
+# NOTE: Enabling D417 on top of the Google would allow committing not documented functions.
+# ignore = ["D417"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.pyrefly]
+project-includes = [
+    "**/*.py*",
+    "**/*.ipynb",
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+# include = ["src", "scripts", "main.py"]
+# exclude = ["data",]
+# ignore = ["data"]
+
+[tool.pytest.ini_options]
+pythonpath = ["tests"]
+testpaths = ["tests"]
+# Pytest "Good Integration Practices": src layout, tests outside the package
+# (no tests/__init__.py) and importlib import mode. The package itself is
+# imported from the editable install created by `uv sync`, never from src/.
+addopts = ["--import-mode=importlib", "-ra", "--strict-markers"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test directories are not packages with importlib import mode.
+"tests/**" = ["INP001"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["mapping_negocios"]
+known-local-folder = ["fakes"]
