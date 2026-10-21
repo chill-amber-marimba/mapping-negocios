@@ -44,6 +44,16 @@ def make_business(
     )
 
 
+def make_dense_businesses(count: int = 25) -> list[Business]:
+    """Enough businesses in ``REGION`` to saturate and split its coarse tiles."""
+    return [
+        make_business(
+            str(i), 40.0 + 0.0009 * (i % 20 + 1), -3.8 + 0.0008 * (i // 20 + 1)
+        )
+        for i in range(count)
+    ]
+
+
 @dataclass
 class FakeGateway:
     """In-memory ``PlacesGateway``."""

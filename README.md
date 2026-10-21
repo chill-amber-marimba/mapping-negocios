@@ -45,6 +45,16 @@ Output: `output/chamberi-madrid.csv` and `output/chamberi-madrid.kml`.
 > Contact fields (phone, website) and rating use higher-priced SKUs. Use
 > `--max-requests` to cap grid searches.
 
+#### Resuming a grid search
+
+When `--grid` runs out of `--max-requests`, the boxes already searched are saved
+to `output/.chamberi-madrid.grid-progress.json`. Run **the same command** again
+(e.g. the next day, or with a new budget) to search only the remaining boxes:
+new businesses are added to the existing CSV, whose rows (and any `adherencia`
+you filled in) are kept. The progress file is deleted once the region is fully
+searched. Changing the tile size or `--type`s requires `--restart`, which
+discards the saved progress and searches from scratch.
+
 ### Output Columns
 
 `place_id, name, primary_type, types, latitude, longitude, formatted_address,

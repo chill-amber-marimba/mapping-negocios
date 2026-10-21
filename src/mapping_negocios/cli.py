@@ -15,10 +15,13 @@ from mapping_negocios.application.extract import ExtractBusinesses
 from mapping_negocios.application.frames import (
     BusinessExporter,
     BusinessImporter,
+    merge_businesses,
     summarize_by_type,
 )
 from mapping_negocios.application.strategies import (
+    GridProgress,
     GridSearchStrategy,
+    ProgressMismatchError,
     SearchStrategy,
     TextSearchStrategy,
 )
@@ -27,6 +30,7 @@ from mapping_negocios.domain.models import PlacesApiError, RegionNotFoundError
 from mapping_negocios.infrastructure.csv_exporter import CsvExporter
 from mapping_negocios.infrastructure.csv_importer import CsvImporter
 from mapping_negocios.infrastructure.google_places import GooglePlacesClient
+from mapping_negocios.infrastructure.grid_progress_store import JsonGridProgressStore
 from mapping_negocios.infrastructure.kml_exporter import KmlExporter
 from mapping_negocios.infrastructure.kml_importer import KmlImporter
 
@@ -90,12 +94,35 @@ def extract(
         int, typer.Option(help="Max subdivisions of saturated tiles.")
     ] = 3,
     max_requests: Annotated[int, typer.Option(help="Grid API request budget.")] = 200,
+    restart: Annotated[
+        bool,
+        typer.Option(help="Discard saved --grid progress and search from scratch."),
+    ] = False,
 ) -> None:
-    """Extract the businesses of REGION into a CSV and an Organic Maps KML."""
+    """Extract the businesses of REGION into a CSV and an Organic Maps KML.
+
+    When --grid runs out of --max-requests, the boxes already searched are saved
+    next to the output; running the same command again continues from there.
+    """
+    stem = slugify(region)
+    store = JsonGridProgressStore(out_dir / f".{stem}.grid-progress.json")
+    if restart:
+        store.clear()
+    grid_strategy: GridSearchStrategy | None = None
+    previous: pl.DataFrame | None = None
+    if grid:
+        progress = _load_progress(store)
+        if progress is not None:
+            previous = _read_previous(out_dir / f"{stem}.csv", store.path)
+            console.print(
+                f"Resuming: skipping {len(progress.completed)} searched boxes "
+                f"and keeping {previous.height} businesses."
+            )
+        grid_strategy = GridSearchStrategy(
+            tile_size_m, place_type or (), max_depth, max_requests, progress
+        )
     strategy: SearchStrategy = (
-        GridSearchStrategy(tile_size_m, place_type or (), max_depth, max_requests)
-        if grid
-        else TextSearchStrategy(query)
+        grid_strategy if grid_strategy is not None else TextSearchStrategy(query)
     )
     try:
         gateway = GooglePlacesClient(Settings.from_env().google_maps_api_key)
@@ -103,18 +130,56 @@ def extract(
     except (ConfigError, PlacesApiError, RegionNotFoundError) as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
+    except ProgressMismatchError as exc:
+        console.print(
+            f"[red]Error:[/red] {exc} Use the same options, or --restart "
+            f"to discard {store.path}."
+        )
+        raise typer.Exit(code=1) from exc
 
-    stem = slugify(region)
+    businesses = (
+        result.businesses
+        if previous is None
+        else merge_businesses(previous, result.businesses)
+    )
     for exporter in EXPORTERS.values():
         written = exporter.export(
-            result.businesses,
-            out_dir / f"{stem}.{exporter.extension}",
-            result.region.name,
+            businesses, out_dir / f"{stem}.{exporter.extension}", result.region.name
         )
         console.print(f"Wrote {written}")
 
-    console.print(f"{result.businesses.height} businesses in {result.region.name}")
-    console.print(summarize_by_type(result.businesses))
+    console.print(f"{businesses.height} businesses in {result.region.name}")
+    console.print(summarize_by_type(businesses))
+    if grid_strategy is not None and grid_strategy.progress is not None:
+        if grid_strategy.budget_exhausted:
+            saved = store.save(grid_strategy.progress)
+            console.print(
+                f"[yellow]Request budget exhausted:[/yellow] progress saved to "
+                f"{saved}. Run the same command again to continue."
+            )
+        else:
+            store.clear()
+
+
+def _load_progress(store: JsonGridProgressStore) -> GridProgress | None:
+    """Load saved grid progress or exit with an error if it is unreadable."""
+    try:
+        return store.load()
+    except ValueError as exc:
+        console.print(f"[red]Error:[/red] {exc} Use --restart to discard it.")
+        raise typer.Exit(code=1) from exc
+
+
+def _read_previous(csv_path: Path, progress_path: Path) -> pl.DataFrame:
+    """Read the businesses of the run being resumed or exit with an error."""
+    try:
+        return CsvImporter().read(csv_path)
+    except (FileNotFoundError, *READ_ERRORS) as exc:
+        console.print(
+            f"[red]Error:[/red] cannot read previous results {csv_path} to resume "
+            f"from {progress_path}: {exc} Restore it, or use --restart."
+        )
+        raise typer.Exit(code=1) from exc
 
 
 @app.command()
