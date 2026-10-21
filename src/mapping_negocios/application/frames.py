@@ -121,6 +121,22 @@ def businesses_to_frame(
     return pl.DataFrame(rows, schema=BUSINESS_SCHEMA)
 
 
+def merge_businesses(previous: pl.DataFrame, new: pl.DataFrame) -> pl.DataFrame:
+    """Append ``new`` businesses to ``previous`` ones, one row per place.
+
+    Args:
+        previous: Businesses already extracted (they win on duplicates, so edits
+            such as a filled ``adherencia`` are kept).
+        new: Businesses from a follow-up extraction.
+
+    Returns:
+        A DataFrame with ``BUSINESS_SCHEMA``.
+    """
+    return pl.concat([previous, new]).unique(
+        "place_id", keep="first", maintain_order=True
+    )
+
+
 def summarize_by_type(frame: pl.DataFrame) -> pl.DataFrame:
     """Count businesses per primary type, most common first.
 

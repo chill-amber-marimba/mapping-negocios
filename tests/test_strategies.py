@@ -1,12 +1,16 @@
 """Tests for search strategies."""
 
+import pytest
+
 from mapping_negocios.application.strategies import (
+    GridProgress,
     GridSearchStrategy,
+    ProgressMismatchError,
     TextSearchStrategy,
 )
 from mapping_negocios.domain.ports import SearchPage
 
-from fakes import REGION, FakeGateway, make_business
+from fakes import REGION, FakeGateway, make_business, make_dense_businesses
 
 
 def test_text_search_follows_pages_until_no_token(gateway: FakeGateway) -> None:
@@ -65,3 +69,45 @@ def test_grid_search_respects_request_budget(gateway: FakeGateway) -> None:
     strategy = GridSearchStrategy(tile_size_m=500, max_requests=4)
     list(strategy.search(gateway, REGION))
     assert len(gateway.nearby_calls) == 4
+    assert strategy.budget_exhausted
+
+
+def test_grid_search_resumes_from_progress(gateway: FakeGateway) -> None:
+    """Budget-limited runs fed back their progress find what one full run finds."""
+    gateway.nearby = make_dense_businesses()
+    full = GridSearchStrategy(tile_size_m=1000, max_depth=3)
+    expected = {b.place_id for b in full.search(gateway, REGION)}
+    full_requests = len(gateway.nearby_calls)
+    assert not full.budget_exhausted
+
+    gateway.nearby_calls.clear()
+    found: set[str] = set()
+    progress: GridProgress | None = None
+    runs = 0
+    while True:
+        runs += 1
+        strategy = GridSearchStrategy(
+            tile_size_m=1000, max_depth=3, max_requests=3, progress=progress
+        )
+        found |= {b.place_id for b in strategy.search(gateway, REGION)}
+        progress = strategy.progress
+        if not strategy.budget_exhausted:
+            break
+
+    assert found == expected
+    assert runs > 1
+    # No box is searched twice across runs.
+    assert len(gateway.nearby_calls) == full_requests
+
+
+def test_grid_search_rejects_progress_of_another_search(
+    gateway: FakeGateway,
+) -> None:
+    """Progress saved with other place types cannot be reused."""
+    progress = GridProgress(REGION.bounds, 1000, ("cafe",))
+    strategy = GridSearchStrategy(
+        tile_size_m=1000, included_types=["bar"], progress=progress
+    )
+    with pytest.raises(ProgressMismatchError):
+        list(strategy.search(gateway, REGION))
+    assert gateway.nearby_calls == []
