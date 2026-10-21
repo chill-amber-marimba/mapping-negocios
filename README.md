@@ -12,7 +12,7 @@ Maps](https://organicmaps.app) imports as a private, offline bookmark list.
 
 ## Setup
 
-1. In Google Cloud, enable **Places API** and create an API key.
+1. Get a GMaps API key (e.g.: the free [Demo API Key](https://developers.google.com/maps/documentation/javascript/demo-key))
 2. Install and configure:
 
 ```bash
