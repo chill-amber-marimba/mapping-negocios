@@ -63,6 +63,23 @@ def test_grid_search_subdivides_saturated_tiles(gateway: FakeGateway) -> None:
     assert strategy.requests_made > 1
 
 
+def test_grid_search_records_results_per_box(gateway: FakeGateway) -> None:
+    """Each searched box keeps the businesses found inside it."""
+    gateway.nearby = make_dense_businesses()
+    strategy = GridSearchStrategy(tile_size_m=1000, max_depth=3)
+    found = {b.place_id for b in strategy.search(gateway, REGION)}
+    assert strategy.progress is not None
+    assert set(strategy.box_results) == strategy.progress.completed
+    assert {
+        b.place_id for businesses in strategy.box_results.values() for b in businesses
+    } == found
+    assert all(
+        box.contains(b.location)
+        for box, businesses in strategy.box_results.items()
+        for b in businesses
+    )
+
+
 def test_grid_search_respects_request_budget(gateway: FakeGateway) -> None:
     """No more than ``max_requests`` calls are made."""
     gateway.nearby = [make_business(str(i), 40.01, -3.79) for i in range(30)]

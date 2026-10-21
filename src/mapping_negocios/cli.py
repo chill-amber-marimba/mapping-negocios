@@ -15,6 +15,7 @@ from mapping_negocios.application.extract import ExtractBusinesses
 from mapping_negocios.application.frames import (
     BusinessExporter,
     BusinessImporter,
+    businesses_to_frame,
     merge_businesses,
     summarize_by_type,
 )
@@ -26,7 +27,11 @@ from mapping_negocios.application.strategies import (
     TextSearchStrategy,
 )
 from mapping_negocios.config import ConfigError, Settings
-from mapping_negocios.domain.models import PlacesApiError, RegionNotFoundError
+from mapping_negocios.domain.models import (
+    BoundingBox,
+    PlacesApiError,
+    RegionNotFoundError,
+)
 from mapping_negocios.infrastructure.csv_exporter import CsvExporter
 from mapping_negocios.infrastructure.csv_importer import CsvImporter
 from mapping_negocios.infrastructure.google_places import GooglePlacesClient
@@ -150,6 +155,8 @@ def extract(
 
     console.print(f"{businesses.height} businesses in {result.region.name}")
     console.print(summarize_by_type(businesses))
+    if grid_strategy is not None:
+        _export_boxes(grid_strategy, out_dir / f"{stem}-bb", result.region.name)
     if grid_strategy is not None and grid_strategy.progress is not None:
         if grid_strategy.budget_exhausted:
             saved = store.save(grid_strategy.progress)
@@ -159,6 +166,30 @@ def extract(
             )
         else:
             store.clear()
+
+
+def box_stem(box: BoundingBox) -> str:
+    """Name a file after a box's south-west and north-east corners.
+
+    Args:
+        box: The bounding box.
+
+    Returns:
+        A name such as ``"S40.000000_W-3.800000_N40.010000_E-3.790000"``.
+    """
+    return f"S{box.south:.6f}_W{box.west:.6f}_N{box.north:.6f}_E{box.east:.6f}"
+
+
+def _export_boxes(strategy: GridSearchStrategy, box_dir: Path, region: str) -> None:
+    """Write a CSV and a KML per box searched in this run, even if empty."""
+    for box, found in strategy.box_results.items():
+        frame = businesses_to_frame(found, region)
+        name = box_stem(box)
+        for exporter in EXPORTERS.values():
+            exporter.export(
+                frame, box_dir / f"{name}.{exporter.extension}", f"{region} {name}"
+            )
+    console.print(f"Wrote {len(strategy.box_results)} boxes to {box_dir}")
 
 
 def _load_progress(store: JsonGridProgressStore) -> GridProgress | None:

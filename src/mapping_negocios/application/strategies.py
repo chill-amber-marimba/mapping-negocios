@@ -99,6 +99,8 @@ class GridSearchStrategy:
     full page is split into quadrants until ``max_depth``. ``max_requests``
     caps API cost; ``progress`` records the boxes covered so a follow-up run,
     given that progress back, resumes where the budget ran out.
+    ``box_results`` holds the businesses kept from each box searched in the
+    last run.
     """
 
     tile_size_m: float = 1000.0
@@ -108,6 +110,7 @@ class GridSearchStrategy:
     progress: GridProgress | None = None
     requests_made: int = 0
     budget_exhausted: bool = False
+    box_results: dict[BoundingBox, list[Business]] = field(default_factory=dict)
 
     def search(self, gateway: PlacesGateway, region: Region) -> Iterator[Business]:
         """Yield businesses found tile by tile, skipping boxes in ``progress``.
@@ -134,6 +137,7 @@ class GridSearchStrategy:
             )
         self.requests_made = 0
         self.budget_exhausted = False
+        self.box_results = {}
         for tile in region.bounds.split_into_tiles(self.tile_size_m):
             yield from self._search_tile(gateway, self.progress, tile, depth=0)
 
@@ -171,5 +175,7 @@ class GridSearchStrategy:
             logger.warning(
                 "Tile %s still saturated at max depth; results may be partial.", tile
             )
+        found = [b for b in results if tile.contains(b.location)]
         progress.completed.add(tile)
-        yield from (b for b in results if tile.contains(b.location))
+        self.box_results[tile] = found
+        yield from found
