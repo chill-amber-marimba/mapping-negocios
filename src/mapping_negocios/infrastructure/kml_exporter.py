@@ -11,6 +11,7 @@ from pathlib import Path
 
 import polars as pl
 
+from mapping_negocios.application.frames import LIST_SEPARATOR
 from mapping_negocios.domain.models import Adherencia
 
 KML_NS = "http://www.opengis.net/kml/2.2"
@@ -104,7 +105,7 @@ def _placemark(row: dict) -> ET.Element:
         if value is None or key in {"name", "latitude", "longitude"}:
             continue
         data = ET.SubElement(extended, _tag("Data"), name=key)
-        text = "|".join(value) if isinstance(value, list) else str(value)
+        text = LIST_SEPARATOR.join(value) if isinstance(value, list) else str(value)
         ET.SubElement(data, _tag("value")).text = text
     point = ET.SubElement(placemark, _tag("Point"))
     ET.SubElement(

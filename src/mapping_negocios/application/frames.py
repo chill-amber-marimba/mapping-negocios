@@ -1,4 +1,4 @@
-"""Conversion between domain entities and Polars DataFrames, plus the export port."""
+"""Conversion between domain entities and Polars DataFrames, plus the I/O ports."""
 
 from collections.abc import Iterable
 from pathlib import Path
@@ -32,6 +32,15 @@ BUSINESS_SCHEMA = pl.Schema(
         "adherencia": pl.Enum(Adherencia),
     }
 )
+# Joins list columns (e.g. ``types``) in text formats such as CSV and KML.
+LIST_SEPARATOR = "|"
+# ``BUSINESS_SCHEMA`` with list columns as joined text, for formats with no lists.
+FLAT_BUSINESS_SCHEMA = pl.Schema(
+    {
+        name: pl.String if isinstance(dtype, pl.List) else dtype
+        for name, dtype in BUSINESS_SCHEMA.items()
+    }
+)
 
 
 class BusinessExporter(Protocol):
@@ -42,6 +51,35 @@ class BusinessExporter(Protocol):
     def export(self, frame: pl.DataFrame, path: Path, title: str) -> Path:
         """Write ``frame`` to ``path`` and return the written path."""
         ...
+
+
+class BusinessImporter(Protocol):
+    """Reads a businesses DataFrame back from some source."""
+
+    extension: str
+
+    def read(self, path: Path) -> pl.DataFrame:
+        """Read ``path`` into a DataFrame with ``BUSINESS_SCHEMA``."""
+        ...
+
+
+def unflatten(frame: pl.DataFrame) -> pl.DataFrame:
+    """Turn a ``FLAT_BUSINESS_SCHEMA`` DataFrame into a ``BUSINESS_SCHEMA`` one.
+
+    Args:
+        frame: DataFrame with list columns joined by ``LIST_SEPARATOR``.
+
+    Returns:
+        A DataFrame with ``BUSINESS_SCHEMA``; empty or null lists become ``[]``.
+    """
+    return frame.with_columns(
+        pl.col(name)
+        .str.split(LIST_SEPARATOR)
+        .list.filter(pl.element() != "")
+        .fill_null(pl.lit([], dtype))
+        for name, dtype in BUSINESS_SCHEMA.items()
+        if isinstance(dtype, pl.List)
+    )
 
 
 def businesses_to_frame(

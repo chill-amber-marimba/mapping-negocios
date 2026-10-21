@@ -3,14 +3,20 @@
 import logging
 import re
 import unicodedata
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Annotated
 
+import polars as pl
 import typer
 from rich.console import Console
 
 from mapping_negocios.application.extract import ExtractBusinesses
-from mapping_negocios.application.frames import BusinessExporter, summarize_by_type
+from mapping_negocios.application.frames import (
+    BusinessExporter,
+    BusinessImporter,
+    summarize_by_type,
+)
 from mapping_negocios.application.strategies import (
     GridSearchStrategy,
     SearchStrategy,
@@ -19,13 +25,25 @@ from mapping_negocios.application.strategies import (
 from mapping_negocios.config import ConfigError, Settings
 from mapping_negocios.domain.models import PlacesApiError, RegionNotFoundError
 from mapping_negocios.infrastructure.csv_exporter import CsvExporter
+from mapping_negocios.infrastructure.csv_importer import CsvImporter
 from mapping_negocios.infrastructure.google_places import GooglePlacesClient
 from mapping_negocios.infrastructure.kml_exporter import KmlExporter
+from mapping_negocios.infrastructure.kml_importer import KmlImporter
 
 app = typer.Typer(
     help="Map the businesses of a region using Google Places.", no_args_is_help=True
 )
 console = Console()
+
+# Adapters by file extension.
+EXPORTERS: dict[str, BusinessExporter] = {
+    exporter.extension: exporter for exporter in (CsvExporter(), KmlExporter())
+}
+IMPORTERS: dict[str, BusinessImporter] = {
+    importer.extension: importer for importer in (CsvImporter(), KmlImporter())
+}
+# What a malformed input file can raise while being read.
+READ_ERRORS = (pl.exceptions.PolarsError, ET.ParseError, ValueError)
 
 
 @app.callback()
@@ -86,9 +104,8 @@ def extract(
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
 
-    exporters: list[BusinessExporter] = [CsvExporter(), KmlExporter()]
     stem = slugify(region)
-    for exporter in exporters:
+    for exporter in EXPORTERS.values():
         written = exporter.export(
             result.businesses,
             out_dir / f"{stem}.{exporter.extension}",
@@ -98,3 +115,45 @@ def extract(
 
     console.print(f"{result.businesses.height} businesses in {result.region.name}")
     console.print(summarize_by_type(result.businesses))
+
+
+@app.command()
+def convert(
+    source: Annotated[
+        Path,
+        typer.Argument(help="CSV or KML file to read.", exists=True, dir_okay=False),
+    ],
+    destination: Annotated[
+        Path,
+        typer.Argument(help="CSV or KML file to write; format from its extension."),
+    ],
+) -> None:
+    """Convert a businesses file from KML to CSV or from CSV to KML."""
+    importer = _adapter_for(IMPORTERS, source)
+    exporter = _adapter_for(EXPORTERS, destination)
+    try:
+        frame = importer.read(source)
+    except READ_ERRORS as exc:
+        console.print(f"[red]Error:[/red] cannot read {source}: {exc}")
+        raise typer.Exit(code=1) from exc
+
+    written = exporter.export(frame, destination, _title(frame, source))
+    console.print(f"Wrote {written} ({frame.height} businesses)")
+
+
+def _adapter_for[A](adapters: dict[str, A], path: Path) -> A:
+    """Pick the adapter for ``path``'s extension or exit with an error."""
+    try:
+        return adapters[path.suffix.lower().removeprefix(".")]
+    except KeyError:
+        supported = ", ".join(f".{ext}" for ext in adapters)
+        console.print(
+            f"[red]Error:[/red] unsupported file {path.name!r}; use {supported}."
+        )
+        raise typer.Exit(code=1) from None
+
+
+def _title(frame: pl.DataFrame, source: Path) -> str:
+    """Name the output after the searched region, falling back to the file name."""
+    regions = frame["search_region"].drop_nulls()
+    return regions[0] if regions.len() else source.stem

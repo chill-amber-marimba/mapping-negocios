@@ -22,6 +22,8 @@ export GOOGLE_MAPS_API_KEY=...
 
 ## Usage
 
+### Extract
+
 ```bash
 # Default: Text Search, cheap (≤ 3 requests, max 60 results)
 uv run mapping-negocios extract "Chamberí, Madrid"
@@ -43,7 +45,7 @@ Output: `output/chamberi-madrid.csv` and `output/chamberi-madrid.kml`.
 > Contact fields (phone, website) and rating use higher-priced SKUs. Use
 > `--max-requests` to cap grid searches.
 
-### Columns
+### Output Columns
 
 `place_id, name, primary_type, types, latitude, longitude, formatted_address,
 postal_code, locality, admin_region, country, phone, website, rating,
@@ -51,12 +53,22 @@ user_rating_count, business_status, google_maps_uri, search_region, adherencia`
 (`types` is `|`-separated in the CSV). `adherencia` is a semaphore
 (`green`, `yellow`, `red`), empty until assessed.
 
-### Opening the map in Organic Maps
+### Opening the output map in Organic Maps
 
 Copy the `.kml` to your phone (AirDrop, cloud drive, e-mail…), open it and
 choose **Organic Maps**. It is imported as a bookmark list named after the
 region, stored locally on the device only. Pins are colored by `adherencia`:
 green, yellow or red, and gray when not assessed yet.
+
+### Convert
+
+Convert between formats (the format comes from each file's extension), e.g.
+to regenerate the map after filling in `adherencia` in the CSV:
+
+```bash
+uv run mapping-negocios convert output/chamberi-madrid.csv output/chamberi-madrid.kml
+uv run mapping-negocios convert output/chamberi-madrid.kml output/chamberi-madrid.csv
+```
 
 ## Contribute
 
@@ -98,8 +110,8 @@ cli.py (composition root)  ──►  application  ──►  domain
 | Layer | Contents |
 |---|---|
 | `domain/` | Entities and value objects (`Business`, `BoundingBox`…), `PlacesGateway` port. No dependencies. |
-| `application/` | `ExtractBusinesses` use case, search strategies, Polars schema/transforms, `BusinessExporter` port. |
-| `infrastructure/` | Google Places HTTP client, CSV and KML exporters. |
+| `application/` | `ExtractBusinesses` use case, search strategies, Polars schema/transforms, `BusinessExporter` and `BusinessImporter` ports. |
+| `infrastructure/` | Google Places HTTP client, CSV and KML exporters and importers. |
 | `cli.py` | Typer CLI wiring concrete adapters. |
 
 If desired, adding this code to a FastAPI endpoint or an ETL task, could be as
