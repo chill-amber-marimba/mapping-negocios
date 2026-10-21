@@ -42,6 +42,8 @@ project-includes = [
     "**/*.py*",
     "**/*.ipynb",
 ]
+# Mirror pytest's `pythonpath` so test helpers like `fakes` resolve.
+search-path = ["src", "tests"]
 
 [tool.pyright]
 venvPath = "."
