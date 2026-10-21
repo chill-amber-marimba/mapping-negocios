@@ -58,7 +58,34 @@ region, stored locally on the device only. Pins are colored by category:
 red = food & drink, orange = shopping, green = health & fitness,
 purple = lodging, yellow = finance, blue = other.
 
-## Architecture
+## Contribute
+
+### Development
+
+```bash
+uv run pytest            # tests (no network; HTTP is mocked)
+uv run ruff check . && uv run ruff format --check .
+uv run pyrefly check
+prek install             # pre-commit hooks
+```
+
+Tests follow pytest's good integration practices: src layout, `tests/` outside
+the package, `--import-mode=importlib`, package imported from uv's editable
+install. Shared fakes live in `tests/fakes.py`.
+
+### CI with Dagger
+
+```bash
+dagger call check        # lint + typecheck + test, concurrently in containers
+dagger call lint | typecheck | test
+
+# Run the extraction in a container; the key is passed as a Dagger secret
+dagger call extract --api-key=env:GOOGLE_MAPS_API_KEY \
+    --region="Chamberí, Madrid" --grid --types=cafe \
+    export --path=./output
+```
+
+### Architecture
 
 Clean architecture: dependencies point inwards only.
 
@@ -75,31 +102,7 @@ cli.py (composition root)  ──►  application  ──►  domain
 | `infrastructure/` | Google Places HTTP client, CSV and KML exporters. |
 | `cli.py` | Typer CLI wiring concrete adapters. |
 
-To add a FastAPI endpoint, a GUI or an ETL task, write a new composition root that
-builds `ExtractBusinesses(gateway, strategy)` and calls it. New data sources or
-output formats are new adapters implementing the ports.
-
-## Development
-
-```bash
-uv run pytest            # tests (no network; HTTP is mocked)
-uv run ruff check . && uv run ruff format --check .
-uv run pyrefly check
-prek install             # pre-commit hooks
-```
-
-Tests follow pytest's good integration practices: src layout, `tests/` outside
-the package, `--import-mode=importlib`, package imported from uv's editable
-install. Shared fakes live in `tests/fakes.py`.
-
-## CI with Dagger
-
-```bash
-dagger call check        # lint + typecheck + test, concurrently in containers
-dagger call lint | typecheck | test
-
-# Run the extraction in a container; the key is passed as a Dagger secret
-dagger call extract --api-key=env:GOOGLE_MAPS_API_KEY \
-    --region="Chamberí, Madrid" --grid --types=cafe \
-    export --path=./output
-```
+If desired, adding this code to a FastAPI endpoint or an ETL task, could be as
+easy as writting a new composition root that builds `ExtractBusinesses(gateway,
+strategy)` and calls it. New data sources or output formats are new adapters
+implementing the ports.
