@@ -2,8 +2,17 @@
 
 import math
 from dataclasses import dataclass, field
+from enum import StrEnum
 
 EARTH_RADIUS_M = 6_371_000.0
+
+
+class Adherencia(StrEnum):
+    """Semaphore of how likely a business is to adhere (e.g. join the strike)."""
+
+    GREEN = "green"
+    YELLOW = "yellow"
+    RED = "red"
 
 
 class PlacesApiError(Exception):
@@ -152,3 +161,4 @@ class Business:
     user_rating_count: int | None = None
     business_status: str | None = None
     google_maps_uri: str | None = None
+    adherencia: Adherencia | None = None  # None until assessed

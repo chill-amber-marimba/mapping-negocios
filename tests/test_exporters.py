@@ -6,6 +6,7 @@ from pathlib import Path
 import polars as pl
 
 from mapping_negocios.application.frames import businesses_to_frame
+from mapping_negocios.domain.models import Adherencia
 from mapping_negocios.infrastructure.csv_exporter import CsvExporter
 from mapping_negocios.infrastructure.kml_exporter import KML_NS, KmlExporter, color_for
 
@@ -24,11 +25,19 @@ def sample_frame() -> pl.DataFrame:
                 types=("cafe", "food"),
                 phone="+34 1",
                 postal_code="28010",
+                adherencia=Adherencia.GREEN,
             ),
             make_business("b", lat=40.015, lng=-3.785),
         ],
         "Test Town",
     )
+
+
+def test_frame_adherencia_is_enum() -> None:
+    """Adherencia is a semaphore enum column; unassessed businesses are null."""
+    frame = sample_frame()
+    assert frame.schema["adherencia"] == pl.Enum(["green", "yellow", "red"])
+    assert frame["adherencia"].to_list() == ["green", None]
 
 
 def test_csv_round_trip(tmp_path: Path) -> None:
@@ -38,6 +47,7 @@ def test_csv_round_trip(tmp_path: Path) -> None:
     assert frame.height == 2
     assert frame["types"][0] == "cafe|food"
     assert frame["postal_code"][0] == "28010"
+    assert frame["adherencia"][0] == "green"
 
 
 def test_kml_structure(tmp_path: Path) -> None:
@@ -46,7 +56,12 @@ def test_kml_structure(tmp_path: Path) -> None:
     root = ET.parse(path).getroot()
     assert root.findtext("k:Document/k:name", namespaces=NS) == "Test Town"
     style_ids = {s.get("id") for s in root.findall("k:Document/k:Style", NS)}
-    assert {"placemark-red", "placemark-blue"} <= style_ids
+    assert style_ids == {
+        "placemark-green",
+        "placemark-yellow",
+        "placemark-red",
+        "placemark-gray",
+    }
 
     placemarks = root.findall("k:Document/k:Placemark", NS)
     assert [p.findtext("k:name", namespaces=NS) for p in placemarks] == [
@@ -55,8 +70,8 @@ def test_kml_structure(tmp_path: Path) -> None:
     ]
     first, second = placemarks
     assert first.findtext("k:Point/k:coordinates", namespaces=NS) == "-3.79,40.01"
-    assert first.findtext("k:styleUrl", namespaces=NS) == "#placemark-red"
-    assert second.findtext("k:styleUrl", namespaces=NS) == "#placemark-blue"
+    assert first.findtext("k:styleUrl", namespaces=NS) == "#placemark-green"
+    assert second.findtext("k:styleUrl", namespaces=NS) == "#placemark-gray"
     assert "Phone: +34 1" in (first.findtext("k:description", namespaces=NS) or "")
     data = {
         d.get("name"): d.findtext("k:value", namespaces=NS)
@@ -67,7 +82,8 @@ def test_kml_structure(tmp_path: Path) -> None:
 
 
 def test_color_for() -> None:
-    """First known type decides the color; unknown types get the default."""
-    assert color_for(["establishment", "pharmacy"]) == "green"
-    assert color_for(["establishment"]) == "blue"
-    assert color_for(None) == "blue"
+    """Adherencia decides the color; unassessed businesses are gray."""
+    assert color_for("green") == "green"
+    assert color_for("yellow") == "yellow"
+    assert color_for("red") == "red"
+    assert color_for(None) == "gray"

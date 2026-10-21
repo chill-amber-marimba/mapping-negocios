@@ -6,7 +6,7 @@ from typing import Protocol
 
 import polars as pl
 
-from mapping_negocios.domain.models import Business
+from mapping_negocios.domain.models import Adherencia, Business
 
 # TODO(me): define this from a common constant, if possible (https://docs.pola.rs/api/python/stable/reference/schema/index.html)
 BUSINESS_SCHEMA = pl.Schema(
@@ -29,8 +29,7 @@ BUSINESS_SCHEMA = pl.Schema(
         "business_status": pl.String,
         "google_maps_uri": pl.String,
         "search_region": pl.String,
-        # TODO(me): Add the likelihood/affinity to join the strike,
-        # kind of semaphore column
+        "adherencia": pl.Enum(Adherencia),
     }
 )
 
@@ -77,8 +76,7 @@ def businesses_to_frame(
             "business_status": b.business_status,
             "google_maps_uri": b.google_maps_uri,
             "search_region": search_region,
-            # TODO(me): Add the likelihood/affinity to join the strike,
-            # kind of semaphore column
+            "adherencia": b.adherencia,
         }
         for b in businesses
     ]
