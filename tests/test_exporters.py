@@ -8,7 +8,13 @@ import polars as pl
 from mapping_negocios.application.frames import businesses_to_frame
 from mapping_negocios.domain.models import Adherencia
 from mapping_negocios.infrastructure.csv_exporter import CsvExporter
-from mapping_negocios.infrastructure.kml_exporter import KML_NS, KmlExporter, color_for
+from mapping_negocios.infrastructure.kml_exporter import (
+    KML_NS,
+    ColorBy,
+    KmlExporter,
+    adherencia_color,
+    type_color,
+)
 
 from fakes import make_business
 
@@ -81,9 +87,31 @@ def test_kml_structure(tmp_path: Path) -> None:
     assert data["types"] == "cafe|food"
 
 
-def test_color_for() -> None:
+def test_kml_colored_by_type(tmp_path: Path) -> None:
+    """With ``ColorBy.TYPE`` pins follow the business type, not adherencia."""
+    path = KmlExporter(ColorBy.TYPE).export(sample_frame(), tmp_path / "x.kml", "T")
+    root = ET.parse(path).getroot()
+    style_ids = {s.get("id") for s in root.findall("k:Document/k:Style", NS)}
+    assert style_ids == {
+        f"placemark-{color}"
+        for color in ("red", "orange", "green", "purple", "yellow", "blue")
+    }
+    first, second = root.findall("k:Document/k:Placemark", NS)
+    # The cafe is green by adherencia but red (food & drink) by type.
+    assert first.findtext("k:styleUrl", namespaces=NS) == "#placemark-red"
+    assert second.findtext("k:styleUrl", namespaces=NS) == "#placemark-blue"
+
+
+def test_adherencia_color() -> None:
     """Adherencia decides the color; unassessed businesses are gray."""
-    assert color_for("green") == "green"
-    assert color_for("yellow") == "yellow"
-    assert color_for("red") == "red"
-    assert color_for(None) == "gray"
+    assert adherencia_color("green") == "green"
+    assert adherencia_color("yellow") == "yellow"
+    assert adherencia_color("red") == "red"
+    assert adherencia_color(None) == "gray"
+
+
+def test_type_color() -> None:
+    """First known type decides the color; unknown types get the default."""
+    assert type_color(["establishment", "pharmacy"]) == "green"
+    assert type_color(["establishment"]) == "blue"
+    assert type_color(None) == "blue"

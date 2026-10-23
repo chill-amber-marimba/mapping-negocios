@@ -70,6 +70,10 @@ choose **Organic Maps**. It is imported as a bookmark list named after the
 region, stored locally on the device only. Pins are colored by `adherencia`:
 green, yellow or red, and gray when not assessed yet.
 
+Add `--color-by-type` to `extract` or `convert` to color pins by business
+category instead: red = food & drink, orange = shopping, green = health &
+fitness, purple = lodging, yellow = finance, blue = other.
+
 ### Convert
 
 Convert between formats (the format comes from each file's extension), e.g.
