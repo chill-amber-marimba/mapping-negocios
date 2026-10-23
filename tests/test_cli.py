@@ -130,6 +130,25 @@ def test_convert_csv_to_kml_and_back(tmp_path: Path) -> None:
     assert_frame_equal(CsvImporter().read(back), CsvImporter().read(source))
 
 
+@pytest.mark.parametrize(
+    ("flags", "expected"),
+    [([], ["green", "gray"]), (["--color-by-type"], ["red", "blue"])],
+    ids=["adherencia", "type"],
+)
+def test_convert_colors_kml(
+    tmp_path: Path, flags: list[str], expected: list[str]
+) -> None:
+    """Pins follow adherencia by default and business type with the flag."""
+    source = write_csv(tmp_path / "in.csv")
+    kml = tmp_path / "map.kml"
+    result = runner.invoke(app, ["convert", str(source), str(kml), *flags])
+    assert result.exit_code == 0, result.output
+    placemarks = ET.parse(kml).getroot().iter(f"{{{KML_NS}}}Placemark")
+    assert [p.findtext(f"{{{KML_NS}}}styleUrl") for p in placemarks] == [
+        f"#placemark-{color}" for color in expected
+    ]
+
+
 def test_convert_rejects_unsupported_extension(tmp_path: Path) -> None:
     """Destinations with an unknown extension fail with a clear message."""
     source = write_csv(tmp_path / "in.csv")

@@ -31,7 +31,7 @@ from mapping_negocios.infrastructure.csv_exporter import CsvExporter
 from mapping_negocios.infrastructure.csv_importer import CsvImporter
 from mapping_negocios.infrastructure.google_places import GooglePlacesClient
 from mapping_negocios.infrastructure.grid_progress_store import JsonGridProgressStore
-from mapping_negocios.infrastructure.kml_exporter import KmlExporter
+from mapping_negocios.infrastructure.kml_exporter import ColorBy, KmlExporter
 from mapping_negocios.infrastructure.kml_importer import KmlImporter
 
 app = typer.Typer(
@@ -39,15 +39,36 @@ app = typer.Typer(
 )
 console = Console()
 
-# Adapters by file extension.
-EXPORTERS: dict[str, BusinessExporter] = {
-    exporter.extension: exporter for exporter in (CsvExporter(), KmlExporter())
-}
+# Importers by file extension.
 IMPORTERS: dict[str, BusinessImporter] = {
     importer.extension: importer for importer in (CsvImporter(), KmlImporter())
 }
 # What a malformed input file can raise while being read.
 READ_ERRORS = (pl.exceptions.PolarsError, ET.ParseError, ValueError)
+
+ColorByTypeOption = Annotated[
+    bool,
+    typer.Option(
+        "--color-by-type",
+        help="Color KML pins by business type instead of adherencia.",
+    ),
+]
+
+
+def exporters(*, color_by_type: bool = False) -> dict[str, BusinessExporter]:
+    """Build the exporters by file extension.
+
+    Args:
+        color_by_type: Color KML pins by business type instead of adherencia.
+
+    Returns:
+        One exporter per supported extension.
+    """
+    color_by = ColorBy.TYPE if color_by_type else ColorBy.ADHERENCIA
+    return {
+        exporter.extension: exporter
+        for exporter in (CsvExporter(), KmlExporter(color_by))
+    }
 
 
 @app.callback()
@@ -98,6 +119,7 @@ def extract(
         bool,
         typer.Option(help="Discard saved --grid progress and search from scratch."),
     ] = False,
+    color_by_type: ColorByTypeOption = False,
 ) -> None:
     """Extract the businesses of REGION into a CSV and an Organic Maps KML.
 
@@ -142,7 +164,7 @@ def extract(
         if previous is None
         else merge_businesses(previous, result.businesses)
     )
-    for exporter in EXPORTERS.values():
+    for exporter in exporters(color_by_type=color_by_type).values():
         written = exporter.export(
             businesses, out_dir / f"{stem}.{exporter.extension}", result.region.name
         )
@@ -192,10 +214,11 @@ def convert(
         Path,
         typer.Argument(help="CSV or KML file to write; format from its extension."),
     ],
+    color_by_type: ColorByTypeOption = False,
 ) -> None:
     """Convert a businesses file from KML to CSV or from CSV to KML."""
     importer = _adapter_for(IMPORTERS, source)
-    exporter = _adapter_for(EXPORTERS, destination)
+    exporter = _adapter_for(exporters(color_by_type=color_by_type), destination)
     try:
         frame = importer.read(source)
     except READ_ERRORS as exc:
