@@ -22,7 +22,37 @@ export GOOGLE_MAPS_API_KEY=...
 
 ## Usage
 
+```
+Options
+│ --verbose             -v
+│ --help                          Show this message and exit.
+
+Commands
+│ extract  Extract the businesses of REGION into a CSV and an Organic Maps KML.
+│ convert  Convert a businesses file from KML to CSV or from CSV to KML.
+```
+
+
 ### Extract
+
+```
+Arguments
+│ *    region      <str>  Region name, e.g. 'Chamberí, Madrid'. [required]
+
+Options
+│ --out-dir                          <path>   Output directory. [default: output]
+│ --grid             --no-grid                Thorough grid search (more API calls) instead of text search. [default: no-grid]
+│ --query                            <str>    Text search query (default mode). [default: businesses]
+│ --type                             <str>    Place type filter for --grid; repeatable.
+│ --tile-size-m                      <float>  Grid tile size in meters. [default: 1000.0]
+│ --max-depth                        <int>    Max subdivisions of saturated tiles. [default: 3]
+│ --max-requests                     <int>    Grid API request budget. [default: 200]
+│ --restart          --no-restart             Discard saved --grid progress and search from scratch. [default: no-restart]
+│ --color-by-type                             Color KML pins by business type instead of adherencia.
+│ --help                                      Show this message and exit.
+```
+
+#### Example
 
 ```bash
 # Default: Text Search, cheap (≤ 3 requests, max 60 results)
@@ -55,7 +85,30 @@ you filled in) are kept. The progress file is deleted once the region is fully
 searched. Changing the tile size or `--type`s requires `--restart`, which
 discards the saved progress and searches from scratch.
 
-### Output Columns
+### Convert
+
+Convert between formats (the format comes from each file's extension).
+
+```
+Arguments
+│ *    source           <file>  CSV or KML file to read. [required]
+│ *    destination      <path>  CSV or KML file to write; format from its extension. [required]
+
+Options
+│ --color-by-type          Color KML pins by business type instead of adherencia.
+│ --help                   Show this message and exit.
+```
+
+#### Example
+
+To regenerate the map after filling in `adherencia` in the CSV:
+
+```bash
+uv run mapping-negocios convert output/chamberi-madrid.csv output/chamberi-madrid.kml
+uv run mapping-negocios convert output/chamberi-madrid.kml output/chamberi-madrid.csv
+```
+
+### Output CSV Columns
 
 `place_id, name, primary_type, types, latitude, longitude, formatted_address,
 postal_code, locality, admin_region, country, phone, website, rating,
@@ -63,26 +116,12 @@ user_rating_count, business_status, google_maps_uri, search_region, adherencia`
 (`types` is `|`-separated in the CSV). `adherencia` is a semaphore
 (`green`, `yellow`, `red`), empty until assessed.
 
-### Opening the output map in Organic Maps
+### Opening the output map in Organic Maps - Recommended
 
 Copy the `.kml` to your phone (AirDrop, cloud drive, e-mail…), open it and
 choose **Organic Maps**. It is imported as a bookmark list named after the
 region, stored locally on the device only. Pins are colored by `adherencia`:
 green, yellow or red, and gray when not assessed yet.
-
-Add `--color-by-type` to `extract` or `convert` to color pins by business
-category instead: red = food & drink, orange = shopping, green = health &
-fitness, purple = lodging, yellow = finance, blue = other.
-
-### Convert
-
-Convert between formats (the format comes from each file's extension), e.g.
-to regenerate the map after filling in `adherencia` in the CSV:
-
-```bash
-uv run mapping-negocios convert output/chamberi-madrid.csv output/chamberi-madrid.kml
-uv run mapping-negocios convert output/chamberi-madrid.kml output/chamberi-madrid.csv
-```
 
 ## Contribute
 
